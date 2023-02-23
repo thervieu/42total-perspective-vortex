@@ -166,8 +166,7 @@ if __name__=="__main__":
     for dir_ in [f'{SAVE_PATH}', f'{SAVE_PATH}/models/',f'{SAVE_PATH}/epochs']:
         if os.path.exists(dir_) is False:
             os.mkdir(dir_)
-    for i in range(0, 6):
-    for subdir_ in [f'{SAVE_PATH}/models/experiment_{i}', f'{SAVE_PATH}/epochs/experiment_{i}']:
+    for subdir_ in [f'{SAVE_PATH}/models/experiment_1', f'{SAVE_PATH}/epochs/experiment_2', f'{SAVE_PATH}/models/experiment_3', f'{SAVE_PATH}/epochs/experiment_4', f'{SAVE_PATH}/models/experiment_5', f'{SAVE_PATH}/epochs/experiment_6']:
         if os.path.exists(subdir_) is False:
             os.mkdir(subdir_)
 

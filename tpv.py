@@ -165,6 +165,10 @@ def fit_and_get_acurracy(epochs, experiment_set=0, subject_number=1, from_scratc
     # Visualize
     # csp.plot_patterns(epochs.info, ch_type="eeg", units="Patterns (AU)", size=1.5)
     # plt.show()
+    if from_scratch:
+        print(f'epoch nb: [prediction] [truth] equal?')
+        for i, prediction in enumerate(clf.predict(epochs_data)):
+            print(f'epoch {i:02d}: [{prediction}] [{epochs.events[:, -1][i]}] {prediction == epochs.events[:, -1][i]}')
 
     return accuracy_score(epochs.events[:, -1], clf.predict(epochs_data))
 

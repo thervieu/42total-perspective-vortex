@@ -32,7 +32,7 @@ def color_percentage(percentage: float) -> str:
     
     return RED + f'{percentage:.2%}' + RESET
 
-SAVE_PATH="."
+SAVE_PATH=os.environ["SAVE_PATH"]
 
 # Task: 1: left of right fist, 2: imagine left or right fist, 3: both fists or feets, 4: imagine both fists or feets
 # T0 - Always rest
@@ -155,15 +155,17 @@ def analyze_subject(subject_number=1, experiment_set=0) -> float:
     return accuracy_score(epochs.events[:, -1], clf.predict(epochs_data))
 
 if __name__=="__main__":
+    if os.path.exists(f'{SAVE_PATH}') is False:
+        os.mkdir(f'{SAVE_PATH}')
     if os.path.exists(f'{SAVE_PATH}/models/') is False:
-        os.mkdir(f'models')
+        os.mkdir(f'{SAVE_PATH}/models')
     for i in range(0, 6):
         if os.path.exists(f'{SAVE_PATH}/models/experiment_{i}') is False:
-            os.mkdir(f'models/experiment_{i}')
-    if os.path.exists(f'./epochs/') is False:
-        os.mkdir(f'epochs')
+            os.mkdir(f'{SAVE_PATH}/models/experiment_{i}')
+    if os.path.exists(f'{SAVE_PATH}/epochs/') is False:
+        os.mkdir(f'{SAVE_PATH}/epochs')
     for i in range(0, 6):
-        if os.path.exists(f'./{SAVE_PATH}/epochs/experiment_{i}') is False:
+        if os.path.exists(f'{SAVE_PATH}/epochs/experiment_{i}') is False:
             os.mkdir(f'{SAVE_PATH}/epochs/experiment_{i}')
 
     # help

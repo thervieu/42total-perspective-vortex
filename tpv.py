@@ -67,10 +67,12 @@ experiments = [
         "mapping": {0: "rest", 1: "imagine both fists", 2: "imagine both feets"},
     },
     {
+        "description": "movement (real or imagine) of fists",
         "runs": [3, 7, 11, 4, 8, 12],
         "mapping": {0: "rest", 1: "left fist", 2: "right fist"},
     },
     {
+        "description": "movement (real or imagine) of fists or feet",
         "runs": [5, 9, 13, 6, 10, 14],
         "mapping": {0: "rest", 1: "both fists", 2: "both feets"},
     },
@@ -102,9 +104,12 @@ def get_data(experiment_set=0, subject_number=1, from_scratch=False) -> Epochs:
 
         # Select channels
         channels = raw.info["ch_names"]
-        good_channels = ["FC3", "FC1", "FCz", "FC2", "FC4",
-                        "C3",  "C1",  "Cz",  "C2",  "C4",
-                        "CP3", "CP1", "CPz", "CP2", "CP4"]
+        # good_channels = ["FC3", "FC1", "FCz", "FC2", "FC4",
+        #                   "C3",  "C1",  "Cz",  "C2",  "C4",
+        #                  "CP3", "CP1", "CPz", "CP2", "CP4"]
+        good_channels = ["FC5", "FC3", "FC1", "FCz", "FC2", "FC4", "FC6",
+                          "C5",  "C3",  "C1",  "Cz",  "C2",  "C4",  "C6",
+                         "CP5", "CP3", "CP1", "CPz", "CP2", "CP4", "CP6"]
         bad_channels = [x for x in channels if x not in good_channels]
         raw.drop_channels(bad_channels)
 
@@ -134,7 +139,8 @@ def get_data(experiment_set=0, subject_number=1, from_scratch=False) -> Epochs:
         print("Tranformed data was gotten from save!") if from_scratch==True else 0
         epochs = read_epochs(f'{SAVE_PATH}/epochs/experiment_{experiment_set}/S{subject_number:03d}_epo.fif')
     return epochs
-    
+
+
 def fit_and_get_acurracy(epochs, experiment_set=0, subject_number=1, from_scratch=False) -> float:
     labels = epochs.events[:, -1]
     epochs_data = epochs.get_data()
@@ -166,9 +172,10 @@ if __name__=="__main__":
     for dir_ in [f'{SAVE_PATH}', f'{SAVE_PATH}/models/',f'{SAVE_PATH}/epochs']:
         if os.path.exists(dir_) is False:
             os.mkdir(dir_)
-    for subdir_ in [f'{SAVE_PATH}/models/experiment_1', f'{SAVE_PATH}/epochs/experiment_2', f'{SAVE_PATH}/models/experiment_3', f'{SAVE_PATH}/epochs/experiment_4', f'{SAVE_PATH}/models/experiment_5', f'{SAVE_PATH}/epochs/experiment_6']:
-        if os.path.exists(subdir_) is False:
-            os.mkdir(subdir_)
+    for i in range(0, 6):
+        for subdir_ in [f'models', f'epochs']:
+            if os.path.exists(f'{SAVE_PATH}/{subdir_}/experiment_{i}') is False:
+                os.mkdir(f'{SAVE_PATH}/{subdir_}/experiment_{i}')
 
     # help
     if len(sys.argv) == 2 and (sys.argv[1]=="-h" or sys.argv[1]=="--help"):
@@ -181,19 +188,20 @@ if __name__=="__main__":
     # create all models and do all predictions
     if len(sys.argv) == 1:
         four_exp_acc = []
-        for i_exp in range(0, 4):
+        for i_exp in range(0, 6):
             accuracies = []
             for i in range(1, 109):
                 subject_accuracy = fit_and_get_acurracy(get_data(i_exp, i, False), i_exp, i, False)
                 accuracies.append(subject_accuracy)
-                print(f'experiment {i_exp}: subject {i:03d}: accuracy {color_percentage(subject_accuracy)}')
+                print(f'experiment {i_exp}: subject {i:03d}: accuracy = {color_percentage(subject_accuracy)}')
             four_exp_acc.append(np.mean(accuracies))
-            print(f'experiment {i_exp} done\n')
+            print(f'experiment {i_exp} done: accuracy = {color_percentage(np.mean(accuracies))}\n')
 
-        print(f'mean accuracy of the four different experiments for all 109 subjects:')
-        for i, exp in enumerate(experiments[0:4]):
-            print(f'mean accuracy of \'{exp["description"]}\': {color_percentage(four_exp_acc[i])}')
-        print(f'mean accuracy of all experiments for all subjects: {color_percentage(np.mean(four_exp_acc, 0))}')
+        print(f'mean accuracy of the six different experiments for all 109 subjects:')
+        for i, exp in enumerate(experiments[0:6]):
+            print(f'\'{exp["description"]}\': {color_percentage(four_exp_acc[i])}')
+        print(f'\nmean accuracy of first four experiments: {color_percentage(np.mean(four_exp_acc[0:4]))}')
+        print(f'mean accuracy of all experiments: {color_percentage(np.mean(four_exp_acc))}')
         exit(0)
     else:
         if len(sys.argv) != 4:
@@ -203,11 +211,11 @@ if __name__=="__main__":
         # create model of specified subject specified experiment and predict
         try:
             subject_nb = int(sys.argv[1])
-            if subject_nb < 1 or subject_nb > 109:
+            if subject_nb < 1 or subject_nb > 108:
                 raise Exception('tpv: arguments: subject number: must be between 1 and 108')
 
             exp_set = int(sys.argv[2])
-            if exp_set < 1 or exp_set > 6:
+            if exp_set < 0 or exp_set > 5:
                 raise Exception('tpv: arguments: experiment_set number: must be between 1 and 6')
 
             mode = sys.argv[3]

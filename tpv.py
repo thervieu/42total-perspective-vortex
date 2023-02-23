@@ -163,18 +163,13 @@ def fit_and_get_acurracy(epochs, experiment_set=0, subject_number=1, from_scratc
     return accuracy_score(epochs.events[:, -1], clf.predict(epochs_data))
 
 if __name__=="__main__":
-    if os.path.exists(f'{SAVE_PATH}') is False:
-        os.mkdir(f'{SAVE_PATH}')
-    if os.path.exists(f'{SAVE_PATH}/models/') is False:
-        os.mkdir(f'{SAVE_PATH}/models')
+    for dir_ in [f'{SAVE_PATH}', f'{SAVE_PATH}/models/',f'{SAVE_PATH}/epochs']:
+        if os.path.exists(dir_) is False:
+            os.mkdir(dir_)
     for i in range(0, 6):
-        if os.path.exists(f'{SAVE_PATH}/models/experiment_{i}') is False:
-            os.mkdir(f'{SAVE_PATH}/models/experiment_{i}')
-    if os.path.exists(f'{SAVE_PATH}/epochs/') is False:
-        os.mkdir(f'{SAVE_PATH}/epochs')
-    for i in range(0, 6):
-        if os.path.exists(f'{SAVE_PATH}/epochs/experiment_{i}') is False:
-            os.mkdir(f'{SAVE_PATH}/epochs/experiment_{i}')
+    for subdir_ in [f'{SAVE_PATH}/models/experiment_{i}', f'{SAVE_PATH}/epochs/experiment_{i}']:
+        if os.path.exists(subdir_) is False:
+            os.mkdir(subdir_)
 
     # help
     if len(sys.argv) == 2 and (sys.argv[1]=="-h" or sys.argv[1]=="--help"):

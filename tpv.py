@@ -76,9 +76,10 @@ experiments = [
     },
 ]
 
-def analyze_subject(subject_number=1, experiment_set=0) -> float:
+def get_data(experiment_set=0, subject_number=1, from_scratch=False) -> Epochs:
     experiment = experiments[experiment_set]
-    if os.path.exists(f'{SAVE_PATH}/epochs/experiment_{experiment_set}/S{subject_number:03d}_epo.fif') is False:
+    if (from_scratch == True
+        or os.path.exists(f'{SAVE_PATH}/epochs/experiment_{experiment_set}/S{subject_number:03d}_epo.fif') is False):
         # #############################################################################
         # # Set parameters and read data
 
@@ -127,14 +128,19 @@ def analyze_subject(subject_number=1, experiment_set=0) -> float:
         events, event_id = events_from_annotations(raw)
         picks = pick_types(raw.info, meg=False, eeg=True, stim=False, eog=False, exclude="bads")
         epochs = Epochs(raw, events, event_id, tmin, tmax, proj=True, picks=picks, baseline=None, preload=True)
-        epochs.save(f'{SAVE_PATH}/epochs/experiment_{experiment_set}/S{subject_number:03d}_epo.fif')
+        epochs.save(f'{SAVE_PATH}/epochs/experiment_{experiment_set}/S{subject_number:03d}_epo.fif', overwrite=True)
+        print("Data has been transformed and saved!") if from_scratch==True else 0
     else:
+        print("Tranformed data was gotten from save!") if from_scratch==True else 0
         epochs = read_epochs(f'{SAVE_PATH}/epochs/experiment_{experiment_set}/S{subject_number:03d}_epo.fif')
+    return epochs
     
+def fit_and_get_acurracy(epochs, experiment_set=0, subject_number=1, from_scratch=False) -> float:
     labels = epochs.events[:, -1]
     epochs_data = epochs.get_data()
 
-    if os.path.exists(f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save') is False:
+    if (from_scratch == True
+        or os.path.exists(f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save') is False):
         # Assemble a classifier
         csp = CSP(n_components=10, reg=None, log=True, norm_trace=False)
         lda = LinearDiscriminantAnalysis()
@@ -144,8 +150,10 @@ def analyze_subject(subject_number=1, experiment_set=0) -> float:
         clf.fit(epochs_data, labels)
 
         joblib.dump(clf, f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save')
+        print("Model was saved!") if from_scratch==True else 0
     else:
         # get model from models dir
+        print("Model was gotten from save!") if from_scratch==True else 0
         clf = joblib.load(f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save')
 
     # Visualize
@@ -182,13 +190,13 @@ if __name__=="__main__":
         for i_exp in range(0, 4):
             accuracies = []
             for i in range(1, 109):
-                subject_accuracy = analyze_subject(i, i_exp)
+                subject_accuracy = fit_and_get_acurracy(get_data(i_exp, i, False), i_exp, i, False)
                 accuracies.append(subject_accuracy)
                 print(f'experiment {i_exp}: subject {i:03d}: accuracy {color_percentage(subject_accuracy)}')
             four_exp_acc.append(np.mean(accuracies))
             print(f'experiment {i_exp} done\n')
 
-        print(f'mean accuracy of the four dieffrent experiments for all 109 subjects:')
+        print(f'mean accuracy of the four different experiments for all 109 subjects:')
         for i, exp in enumerate(experiments[0:4]):
             print(f'mean accuracy of \'{exp["description"]}\': {color_percentage(four_exp_acc[i])}')
         print(f'mean accuracy of all experiments for all subjects: {color_percentage(np.mean(four_exp_acc, 0))}')
@@ -200,22 +208,24 @@ if __name__=="__main__":
 
         # create model of specified subject specified experiment and predict
         try:
-            subject_number = int(sys.argv[1])
-            if subject_number < 1 or subject_number > 109:
+            subject_nb = int(sys.argv[1])
+            if subject_nb < 1 or subject_nb > 109:
                 raise Exception('tpv: arguments: subject number: must be between 1 and 108')
 
-            experiment_set = int(sys.argv[2])
-            if experiment_set < 1 or experiment_set > 6:
+            exp_set = int(sys.argv[2])
+            if exp_set < 1 or exp_set > 6:
                 raise Exception('tpv: arguments: experiment_set number: must be between 1 and 6')
 
             mode = sys.argv[3]
             if mode != "train" and mode != "predict":
                 raise Exception('tpv: arguments: experiment_set number: must be \'train\' or \'predict\'')
 
-            score_subject = analyze_subject(subject_number, experiment_set)
-
-            print(f'mean accuracy for all experiments: {color_percentage(score_subject)}')
-            exit(0)
+            if mode=="train":
+                get_data(exp_set, subject_nb, True)
+            else:
+                score_subject = fit_and_get_acurracy(get_data(exp_set, subject_nb, False), exp_set, subject_nb, True)
+                print(f'mean accuracy for all experiments: {color_percentage(score_subject)}')
+                exit(0)
         except Exception as e:
             print(e)
             exit(0)

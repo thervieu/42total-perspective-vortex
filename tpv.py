@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.model_selection import ShuffleSplit
+from sklearn.model_selection import ShuffleSplit, cross_val_score
 from sklearn.metrics import accuracy_score
 from sklearn.ensemble import RandomForestClassifier
 
@@ -141,7 +141,7 @@ def get_data(experiment_set=0, subject_number=1, from_scratch=False) -> Epochs:
     return epochs
 
 
-def fit_and_get_acurracy(epochs, experiment_set=0, subject_number=1, from_scratch=False) -> float:
+def get_model(epochs, experiment_set=0, subject_number=1, from_scratch=False) -> float:
     labels = epochs.events[:, -1]
     epochs_data = epochs.get_data()
 
@@ -162,15 +162,28 @@ def fit_and_get_acurracy(epochs, experiment_set=0, subject_number=1, from_scratc
         print("Model was gotten from save!") if from_scratch==True else 0
         clf = joblib.load(f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save')
 
-    # Visualize
-    # csp.plot_patterns(epochs.info, ch_type="eeg", units="Patterns (AU)", size=1.5)
-    # plt.show()
+    if from_scratch==True:
+        cv = ShuffleSplit(10, test_size=0.4, random_state=42)
+        epochs_train = epochs.copy().crop(tmin=1.0, tmax=4.0).get_data()
+        scores = cross_val_score(clf, epochs_train, labels, cv=cv, n_jobs=None)
+        print(scores)
+        print(np.mean(scores))
+
+    return clf
+
+def predict_and_get_acurracy(epochs, clf, experiment_set, from_scratch=False) -> float:
+    
+    labels = epochs.events[:, -1]
+    epochs_data = epochs.get_data()
+
     if from_scratch:
         print(f'epoch nb: [prediction] [truth] equal?')
         for i, prediction in enumerate(clf.predict(epochs_data)):
             print(f'epoch {i:02d}: [{prediction}] [{epochs.events[:, -1][i]}] {prediction == epochs.events[:, -1][i]}')
-
+            time.sleep(0.05)
+    
     return accuracy_score(epochs.events[:, -1], clf.predict(epochs_data))
+
 
 if __name__=="__main__":
     for dir_ in [f'{SAVE_PATH}', f'{SAVE_PATH}/models/',f'{SAVE_PATH}/epochs']:
@@ -195,7 +208,9 @@ if __name__=="__main__":
         for i_exp in range(0, 6):
             accuracies = []
             for i in range(1, 109):
-                subject_accuracy = fit_and_get_acurracy(get_data(i_exp, i, False), i_exp, i, False)
+                epochs = get_data(i_exp, i, False)
+                clf = get_model(epochs, i_exp, i, False)
+                subject_accuracy = predict_and_get_acurracy(epochs, clf, False)
                 accuracies.append(subject_accuracy)
                 print(f'experiment {i_exp}: subject {i:03d}: accuracy = {color_percentage(subject_accuracy)}')
             four_exp_acc.append(np.mean(accuracies))
@@ -227,11 +242,14 @@ if __name__=="__main__":
                 raise Exception('tpv: arguments: experiment_set number: must be \'train\' or \'predict\'')
 
             if mode=="train":
-                get_data(exp_set, subject_nb, True)
+                epochs = get_data(exp_set, subject_nb, True)
+                get_model(epochs, exp_set, subject_nb, True)
             else:
-                score_subject = fit_and_get_acurracy(get_data(exp_set, subject_nb, False), exp_set, subject_nb, True)
+                epochs = get_data(exp_set, subject_nb, False)
+                clf = get_model(epochs, exp_set, subject_nb, False)
+                score_subject = predict_and_get_acurracy(epochs, clf, True)
                 print(f'mean accuracy for all experiments: {color_percentage(score_subject)}')
-                exit(0)
+            exit(0)
         except Exception as e:
             print(e)
             exit(0)

@@ -177,12 +177,12 @@ def get_model_and_data(epochs, experiment_set=0, subject_number=1, from_scratch=
         print("Model was gotten from save!") if from_scratch==True else 0
         clf = joblib.load(f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save')
 
-    cv = ShuffleSplit(10, test_size=0.25, random_state=42)
-    scores = cross_val_score(clf, epochs_shuffled[0:int(0.75*len(epochs_shuffled))], labels_shuffled[0:int(0.75*len(labels_shuffled))], cv=cv, n_jobs=None)
-    # print(scores)
-    # print(np.mean(scores))
+    if from_scratch==True:
+        cv = ShuffleSplit(10, test_size=0.2, random_state=42)
+        scores = cross_val_score(clf, epochs_shuffled[0:int(0.75*len(epochs_shuffled))], labels_shuffled[0:int(0.75*len(labels_shuffled))], cv=cv, n_jobs=None)
+        print(scores)
+        print(np.mean(scores))
 
-    # print(accuracy_score(labels[int(0.75*len(epochs_data)):], clf.predict(epochs_data[int(0.75*len(epochs_data)):])))
     return clf, epochs_shuffled, labels_shuffled
 
 def predict_and_get_acurracy(clf, epochs, labels, from_scratch) -> float:

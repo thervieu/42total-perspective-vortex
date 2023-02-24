@@ -7,6 +7,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import ShuffleSplit, cross_val_score
 from sklearn.metrics import accuracy_score
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.utils import shuffle
 
 from mne import Epochs, pick_types, annotations_from_events, events_from_annotations, set_log_level, read_epochs
 from mne.channels import make_standard_montage
@@ -25,11 +26,10 @@ RED="\033[31m"
 RESET="\033[37m"
 
 def color_percentage(percentage: float) -> str:
-    if percentage > 0.9:
+    if percentage >= 0.9:
         return GREEN + f'{percentage:.2%}' + RESET
-    if percentage > 0.75:
+    if percentage >= 0.75:
         return YELLOW + f'{percentage:.2%}' + RESET
-    
     return RED + f'{percentage:.2%}' + RESET
 
 def color_truth(truth: bool) -> str:
@@ -109,12 +109,19 @@ def get_data(experiment_set=0, subject_number=1, from_scratch=False) -> Epochs:
 
         # Select channels
         channels = raw.info["ch_names"]
-        # good_channels = ["FC3", "FC1", "FCz", "FC2", "FC4",
-        #                   "C3",  "C1",  "Cz",  "C2",  "C4",
-        #                  "CP3", "CP1", "CPz", "CP2", "CP4"]
-        good_channels = ["FC5", "FC3", "FC1", "FCz", "FC2", "FC4", "FC6",
-                          "C5",  "C3",  "C1",  "Cz",  "C2",  "C4",  "C6",
-                         "CP5", "CP3", "CP1", "CPz", "CP2", "CP4", "CP6"]
+        good_channels = [       "Fz",
+                        "FC1", "FCz", "FC2",
+                  "C3",  "C1",  "Cz",  "C2",  "C4",
+                        "CP1", "CPz", "CP2",
+                                "Pz",]
+        # good_channels = ["FC5", "FC3", "FC1", "FCz", "FC2", "FC4", "FC6",
+        #                   "C5",  "C3",  "C1",  "Cz",  "C2",  "C4",  "C6",
+        #                  "CP5", "CP3", "CP1", "CPz", "CP2", "CP4", "CP6"]
+        # good_channels = ["F5",  "F3",  "F1",  "Fz",  "F2",  "F4",  "F6",
+        #                 "FC5", "FC3", "FC1", "FCz", "FC2", "FC4", "FC6",
+        #                  "C5",  "C3",  "C1",  "Cz",  "C2",  "C4",  "C6",
+        #                 "CP5", "CP3", "CP1", "CPz", "CP2", "CP4", "CP6",
+        #                  "P5",  "P3",  "P1",  "Pz",  "P2",  "P4",  "P6"]
         bad_channels = [x for x in channels if x not in good_channels]
         raw.drop_channels(bad_channels)
 
@@ -143,12 +150,15 @@ def get_data(experiment_set=0, subject_number=1, from_scratch=False) -> Epochs:
     else:
         print("Tranformed data was gotten from save!") if from_scratch==True else 0
         epochs = read_epochs(f'{SAVE_PATH}/epochs/experiment_{experiment_set}/S{subject_number:03d}_epo.fif')
+    
     return epochs
 
 
-def get_model(epochs, experiment_set=0, subject_number=1, from_scratch=False) -> float:
+def get_model_and_data(epochs, experiment_set=0, subject_number=1, from_scratch=False) -> float:
     labels = epochs.events[:, -1]
     epochs_data = epochs.get_data()
+    epochs_train = epochs.copy().crop(tmin=1.0, tmax=4.0).get_data()
+    epochs_shuffled, labels_shuffled = shuffle(epochs_train, labels)
 
     if (from_scratch == True
         or os.path.exists(f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save') is False):
@@ -158,7 +168,7 @@ def get_model(epochs, experiment_set=0, subject_number=1, from_scratch=False) ->
         clf = Pipeline([("CSP", csp), ("LDA", lda)])
 
         # fit our pipeline to the experiment
-        clf.fit(epochs_data, labels)
+        clf.fit(epochs_shuffled, labels_shuffled)
 
         joblib.dump(clf, f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save')
         print("Model was saved!") if from_scratch==True else 0
@@ -167,28 +177,23 @@ def get_model(epochs, experiment_set=0, subject_number=1, from_scratch=False) ->
         print("Model was gotten from save!") if from_scratch==True else 0
         clf = joblib.load(f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save')
 
-    if from_scratch==True:
-        cv = ShuffleSplit(10, test_size=0.4, random_state=42)
-        epochs_train = epochs.copy().crop(tmin=1.0, tmax=4.0).get_data()
-        scores = cross_val_score(clf, epochs_train, labels, cv=cv, n_jobs=None)
-        print(scores)
-        print(np.mean(scores))
+    cv = ShuffleSplit(10, test_size=0.25, random_state=42)
+    scores = cross_val_score(clf, epochs_shuffled[0:int(0.75*len(epochs_shuffled))], labels_shuffled[0:int(0.75*len(labels_shuffled))], cv=cv, n_jobs=None)
+    # print(scores)
+    # print(np.mean(scores))
 
-    return clf
+    # print(accuracy_score(labels[int(0.75*len(epochs_data)):], clf.predict(epochs_data[int(0.75*len(epochs_data)):])))
+    return clf, epochs_shuffled, labels_shuffled
 
-def predict_and_get_acurracy(epochs, clf, from_scratch) -> float:
+def predict_and_get_acurracy(clf, epochs, labels, from_scratch) -> float:
 
-    labels = epochs.events[:, -1]
-    epochs_data = epochs.get_data()
-
-    print(from_scratch)
     if from_scratch==True:
         print(f'epoch nb: [prediction] [truth] equal?')
-        for i, prediction in enumerate(clf.predict(epochs_data)):
-            print(f'epoch {i:02d}: [{prediction}] [{epochs.events[:, -1][i]}] {color_truth(prediction == epochs.events[:, -1][i])}')
+        for i, prediction in enumerate(clf.predict(epochs[int(0.75*len(epochs)):])):
+            print(f'epoch {i:02d}: [{prediction}] [{labels[int(0.75*len(epochs)):][i]}] {color_truth(prediction == labels[int(0.75*len(epochs)):][i])}')
             time.sleep(0.05)
     
-    return accuracy_score(epochs.events[:, -1], clf.predict(epochs_data))
+    return accuracy_score(labels[int(0.75*len(labels)):], clf.predict(epochs[int(0.75*len(epochs)):]))
 
 
 if __name__=="__main__":
@@ -207,7 +212,7 @@ if __name__=="__main__":
         print('\t\'python3 tpv.py\' to train and predict all experiments on all subjects')
         print('\texample:\'python3 tpv.py 1 2 train\' to train and predict all experiments on all subjects')
         exit()
-    
+
     # create all models and do all predictions
     if len(sys.argv) == 1:
         four_exp_acc = []
@@ -215,8 +220,8 @@ if __name__=="__main__":
             accuracies = []
             for i in range(1, 109):
                 epochs = get_data(i_exp, i, False)
-                clf = get_model(epochs, i_exp, i, False)
-                subject_accuracy = predict_and_get_acurracy(epochs, clf, False)
+                clf, epochs, labels = get_model_and_data(epochs, i_exp, i, False)
+                subject_accuracy = predict_and_get_acurracy(clf, epochs, labels, False)
                 accuracies.append(subject_accuracy)
                 print(f'experiment {i_exp}: subject {i:03d}: accuracy = {color_percentage(subject_accuracy)}')
             four_exp_acc.append(np.mean(accuracies))
@@ -238,11 +243,10 @@ if __name__=="__main__":
             exp_set = int(sys.argv[1])
             if exp_set < 0 or exp_set > 5:
                 raise Exception('tpv: arguments: experiment_set number: must be between 0 and 5')
-            print(exp_set)
+
             subject_nb = int(sys.argv[2])
             if subject_nb < 1 or subject_nb > 108:
                 raise Exception('tpv: arguments: subject number: must be between 1 and 108')
-            print(subject_nb)
 
             mode = sys.argv[3]
             if mode != "train" and mode != "predict":
@@ -250,11 +254,11 @@ if __name__=="__main__":
 
             if mode=="train":
                 epochs = get_data(exp_set, subject_nb, True)
-                get_model(epochs, exp_set, subject_nb, True)
+                get_model_and_data(epochs, exp_set, subject_nb, True)
             else:
                 epochs = get_data(exp_set, subject_nb, False)
-                clf = get_model(epochs, exp_set, subject_nb, False)
-                score_subject = predict_and_get_acurracy(epochs, clf, True)
+                clf, epochs, labels = get_model_and_data(epochs, exp_set, subject_nb, False)
+                score_subject = predict_and_get_acurracy(clf, epochs, labels, True)
                 print(f'mean accuracy for all experiments: {color_percentage(score_subject)}')
             exit(0)
         except Exception as e:

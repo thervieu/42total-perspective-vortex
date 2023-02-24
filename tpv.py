@@ -32,6 +32,11 @@ def color_percentage(percentage: float) -> str:
     
     return RED + f'{percentage:.2%}' + RESET
 
+def color_truth(truth: bool) -> str:
+    if truth==True:
+        return GREEN + f'{truth}' + RESET
+    return RED + f'{truth}' + RESET
+
 SAVE_PATH=os.environ["SAVE_PATH"]
 
 # Task: 1: left of right fist, 2: imagine left or right fist, 3: both fists or feets, 4: imagine both fists or feets
@@ -171,15 +176,16 @@ def get_model(epochs, experiment_set=0, subject_number=1, from_scratch=False) ->
 
     return clf
 
-def predict_and_get_acurracy(epochs, clf, experiment_set, from_scratch=False) -> float:
-    
+def predict_and_get_acurracy(epochs, clf, from_scratch) -> float:
+
     labels = epochs.events[:, -1]
     epochs_data = epochs.get_data()
 
-    if from_scratch:
+    print(from_scratch)
+    if from_scratch==True:
         print(f'epoch nb: [prediction] [truth] equal?')
         for i, prediction in enumerate(clf.predict(epochs_data)):
-            print(f'epoch {i:02d}: [{prediction}] [{epochs.events[:, -1][i]}] {prediction == epochs.events[:, -1][i]}')
+            print(f'epoch {i:02d}: [{prediction}] [{epochs.events[:, -1][i]}] {color_truth(prediction == epochs.events[:, -1][i])}')
             time.sleep(0.05)
     
     return accuracy_score(epochs.events[:, -1], clf.predict(epochs_data))
@@ -229,13 +235,14 @@ if __name__=="__main__":
 
         # create model of specified subject specified experiment and predict
         try:
-            subject_nb = int(sys.argv[1])
+            exp_set = int(sys.argv[1])
+            if exp_set < 0 or exp_set > 5:
+                raise Exception('tpv: arguments: experiment_set number: must be between 0 and 5')
+            print(exp_set)
+            subject_nb = int(sys.argv[2])
             if subject_nb < 1 or subject_nb > 108:
                 raise Exception('tpv: arguments: subject number: must be between 1 and 108')
-
-            exp_set = int(sys.argv[2])
-            if exp_set < 0 or exp_set > 5:
-                raise Exception('tpv: arguments: experiment_set number: must be between 1 and 6')
+            print(subject_nb)
 
             mode = sys.argv[3]
             if mode != "train" and mode != "predict":

@@ -6,17 +6,19 @@ from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import ShuffleSplit, cross_val_score
 from sklearn.metrics import accuracy_score
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.utils import shuffle
 
 from mne import Epochs, pick_types, annotations_from_events, events_from_annotations, set_log_level, read_epochs
 from mne.channels import make_standard_montage
 from mne.io import concatenate_raws, read_raw_edf
 from mne.datasets import eegbci
-from mne.decoding import CSP, SPoC
+# from mne.decoding import CSP, 
 from mne.viz import plot_events, plot_montage
 
 import joblib
+
+from CSP import CSP
+from PCA import PCA
 
 set_log_level("WARNING")
 
@@ -156,16 +158,18 @@ def get_data(experiment_set=0, subject_number=1, from_scratch=False) -> Epochs:
 
 def get_model_and_data(epochs, experiment_set=0, subject_number=1, from_scratch=False) -> float:
     labels = epochs.events[:, -1]
-    epochs_data = epochs.get_data()
     epochs_train = epochs.copy().crop(tmin=1.0, tmax=4.0).get_data()
     epochs_shuffled, labels_shuffled = shuffle(epochs_train, labels)
 
     if (from_scratch == True
         or os.path.exists(f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save') is False):
         # Assemble a classifier
-        csp = CSP(n_components=10, reg=None, log=True, norm_trace=False)
+        # csp = CSP(n_components=10)
+        # lda = LinearDiscriminantAnalysis()
+        # clf = Pipeline([("CSP", csp), ("LDA", lda)])
+        pca = PCA(n_components=10)
         lda = LinearDiscriminantAnalysis()
-        clf = Pipeline([("CSP", csp), ("LDA", lda)])
+        clf = Pipeline([("PCA", pca), ("LDA", lda)])
 
         # fit our pipeline to the experiment
         clf.fit(epochs_shuffled, labels_shuffled)
@@ -178,25 +182,27 @@ def get_model_and_data(epochs, experiment_set=0, subject_number=1, from_scratch=
         clf = joblib.load(f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save')
 
     if from_scratch==True:
-        cv = ShuffleSplit(10, test_size=0.2, random_state=42)
-        scores = cross_val_score(clf, epochs_shuffled[0:int(0.75*len(epochs_shuffled))], labels_shuffled[0:int(0.75*len(labels_shuffled))], cv=cv, n_jobs=None)
+        cv = ShuffleSplit(10, test_size=0.2)
+        scores = cross_val_score(clf, epochs_shuffled, labels_shuffled, cv=cv, n_jobs=None)
         print(scores)
         print(np.mean(scores))
 
     return clf, epochs_shuffled, labels_shuffled
 
 def predict_and_get_acurracy(clf, epochs, labels, from_scratch) -> float:
-
     if from_scratch==True:
         print(f'epoch nb: [prediction] [truth] equal?')
-        for i, prediction in enumerate(clf.predict(epochs[int(0.75*len(epochs)):])):
-            print(f'epoch {i:02d}: [{prediction}] [{labels[int(0.75*len(epochs)):][i]}] {color_truth(prediction == labels[int(0.75*len(epochs)):][i])}')
+        for i, prediction in enumerate(clf.predict(epochs)):
+            print(prediction)
+            print(f'epoch {i:02d}: [{prediction}] [{labels[i]}] {color_truth(prediction == labels[i])}')
             time.sleep(0.05)
     
-    return accuracy_score(labels[int(0.75*len(labels)):], clf.predict(epochs[int(0.75*len(epochs)):]))
+    return accuracy_score(labels, clf.predict(epochs))
 
 
 if __name__=="__main__":
+    np.random.seed(seed=int(time.time())) 
+
     for dir_ in [f'{SAVE_PATH}', f'{SAVE_PATH}/models/',f'{SAVE_PATH}/epochs']:
         if os.path.exists(dir_) is False:
             os.mkdir(dir_)

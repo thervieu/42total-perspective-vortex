@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.model_selection import ShuffleSplit, cross_val_score
+from sklearn.model_selection import ShuffleSplit, cross_val_score, train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.utils import shuffle
 
@@ -12,13 +12,12 @@ from mne import Epochs, pick_types, annotations_from_events, events_from_annotat
 from mne.channels import make_standard_montage
 from mne.io import concatenate_raws, read_raw_edf
 from mne.datasets import eegbci
-# from mne.decoding import CSP, 
+# from mne.decoding import CSP 
 from mne.viz import plot_events, plot_montage
 
 import joblib
 
 from CSP import CSP
-from PCA import PCA
 
 set_log_level("WARNING")
 
@@ -89,11 +88,7 @@ def get_data(experiment_set=0, subject_number=1, from_scratch=False) -> Epochs:
     experiment = experiments[experiment_set]
     if (from_scratch == True
         or os.path.exists(f'{SAVE_PATH}/epochs/experiment_{experiment_set}/S{subject_number:03d}_epo.fif') is False):
-        # #############################################################################
-        # # Set parameters and read data
 
-        # avoid classification of evoked responses by using epochs that start 1s after
-        # cue onset.
         tmin, tmax = -1.0, 4.0
 
         subject_raws = []
@@ -111,14 +106,14 @@ def get_data(experiment_set=0, subject_number=1, from_scratch=False) -> Epochs:
 
         # Select channels
         channels = raw.info["ch_names"]
-        good_channels = [       "Fz",
-                        "FC1", "FCz", "FC2",
-                  "C3",  "C1",  "Cz",  "C2",  "C4",
-                        "CP1", "CPz", "CP2",
-                                "Pz",]
-        # good_channels = ["FC5", "FC3", "FC1", "FCz", "FC2", "FC4", "FC6",
-        #                   "C5",  "C3",  "C1",  "Cz",  "C2",  "C4",  "C6",
-        #                  "CP5", "CP3", "CP1", "CPz", "CP2", "CP4", "CP6"]
+        # good_channels = [       "Fz",
+        #                 "FC1", "FCz", "FC2",
+        #           "C3",  "C1",  "Cz",  "C2",  "C4",
+        #                 "CP1", "CPz", "CP2",
+        #                         "Pz",]
+        good_channels = ["FC5", "FC3", "FC1", "FCz", "FC2", "FC4", "FC6",
+                          "C5",  "C3",  "C1",  "Cz",  "C2",  "C4",  "C6",
+                         "CP5", "CP3", "CP1", "CPz", "CP2", "CP4", "CP6"]
         # good_channels = ["F5",  "F3",  "F1",  "Fz",  "F2",  "F4",  "F6",
         #                 "FC5", "FC3", "FC1", "FCz", "FC2", "FC4", "FC6",
         #                  "C5",  "C3",  "C1",  "Cz",  "C2",  "C4",  "C6",
@@ -130,20 +125,8 @@ def get_data(experiment_set=0, subject_number=1, from_scratch=False) -> Epochs:
         # Apply band-pass filter
         raw.notch_filter(60, method="iir")
         raw.filter(7.0, 32.0, fir_design="firwin", skip_by_annotation="edge")
-        # # print(raw.info)
-
-        # Debug show data
-        # raw.plot_psd()
-        # raw.plot(n_channels=25, start=0, duration=40, scalings=dict(eeg=100e-6))
-        # plt.show()
-
-        ########################################################################################################################
-
-        # fig = plot_events(events, sfreq=raw.info["sfreq"], first_samp=raw.first_samp, event_id=event_id)
-        # fig.subplots_adjust(right=0.7)  # make room for legend
 
         # Read epochs
-        # Testing will be done with a running classifier
         events, event_id = events_from_annotations(raw)
         picks = pick_types(raw.info, meg=False, eeg=True, stim=False, eog=False, exclude="bads")
         epochs = Epochs(raw, events, event_id, tmin, tmax, proj=True, picks=picks, baseline=None, preload=True)
@@ -161,19 +144,19 @@ def get_model_and_data(epochs, experiment_set=0, subject_number=1, from_scratch=
     epochs_train = epochs.copy().crop(tmin=1.0, tmax=4.0).get_data()
     epochs_shuffled, labels_shuffled = shuffle(epochs_train, labels)
 
+    cv = ShuffleSplit(10, test_size=0.2)
     if (from_scratch == True
         or os.path.exists(f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save') is False):
         # Assemble a classifier
-        # csp = CSP(n_components=10)
-        # lda = LinearDiscriminantAnalysis()
-        # clf = Pipeline([("CSP", csp), ("LDA", lda)])
-        pca = PCA(n_components=10)
+        csp = CSP(n_components=6)
         lda = LinearDiscriminantAnalysis()
-        clf = Pipeline([("PCA", pca), ("LDA", lda)])
+        clf = Pipeline([("CSP", csp), ("LDA", lda)])
 
         # fit our pipeline to the experiment
-        clf.fit(epochs_shuffled, labels_shuffled)
+        X_train, X_test, y_train, y_test = train_test_split(epochs_shuffled, labels_shuffled, random_state=0)
+        clf.fit(X_train, y_train)
 
+        # save model
         joblib.dump(clf, f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save')
         print("Model was saved!") if from_scratch==True else 0
     else:
@@ -182,22 +165,29 @@ def get_model_and_data(epochs, experiment_set=0, subject_number=1, from_scratch=
         clf = joblib.load(f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save')
 
     if from_scratch==True:
-        cv = ShuffleSplit(10, test_size=0.2)
         scores = cross_val_score(clf, epochs_shuffled, labels_shuffled, cv=cv, n_jobs=None)
-        print(scores)
-        print(np.mean(scores))
+        print(f'cross_val_score: {np.mean(scores)}')
 
     return clf, epochs_shuffled, labels_shuffled
 
 def predict_and_get_acurracy(clf, epochs, labels, from_scratch) -> float:
+    cv = ShuffleSplit(10, test_size=0.2)
+    X_train, X_test, y_train, y_test = train_test_split(epochs, labels, random_state=0)
+    # clf.fit(X_train, y_train)
+
+    predictions = clf.predict(X_test)
     if from_scratch==True:
         print(f'epoch nb: [prediction] [truth] equal?')
-        for i, prediction in enumerate(clf.predict(epochs)):
-            print(prediction)
-            print(f'epoch {i:02d}: [{prediction}] [{labels[i]}] {color_truth(prediction == labels[i])}')
+        for i, prediction in enumerate(predictions):
+            print(f'epoch {i:02d}: [{prediction}] [{y_test[i]}] {color_truth(prediction == y_test[i])}')
             time.sleep(0.05)
+
+    return accuracy_score(predictions, y_test)
     
-    return accuracy_score(labels, clf.predict(epochs))
+    scores = cross_val_score(clf, epochs, labels, cv=cv, n_jobs=None)
+    return clf.score(epochs, labels)
+    return np.mean(scores)
+    return accuracy_score(labels, predictions)
 
 
 if __name__=="__main__":
@@ -236,6 +226,7 @@ if __name__=="__main__":
         print(f'mean accuracy of the six different experiments for all 109 subjects:')
         for i, exp in enumerate(experiments[0:6]):
             print(f'\'{exp["description"]}\': {color_percentage(four_exp_acc[i])}')
+       
         print(f'\nmean accuracy of first four experiments: {color_percentage(np.mean(four_exp_acc[0:4]))}')
         print(f'mean accuracy of all experiments: {color_percentage(np.mean(four_exp_acc))}')
         exit(0)

@@ -2,6 +2,17 @@ import numpy as np
 from scipy import linalg
 from sklearn.base import TransformerMixin, BaseEstimator
 
+# good explanation
+# https://towardsdatascience.com/a-step-by-step-implementation-of-principal-component-analysis-5520cc6cd598
+# for working with multiple channels/ and classes
+# https://github.com/mne-tools/mne-python/blob/main/mne/decoding/csp.py
+# great code
+# https://www.askpython.com/python/examples/principal-component-analysis
+# explanation and code
+# https://www.youtube.com/watch?v=Rjr62b_h7S4
+# graphs and explanation
+# http://ava.ac/img/Year1/csp-report.pdf
+
 class CSP(TransformerMixin, BaseEstimator):
     def __init__(self, n_components=4):
         if not isinstance(n_components, int):
@@ -9,11 +20,6 @@ class CSP(TransformerMixin, BaseEstimator):
         
         self.n_components =  n_components
     
-    def _calculate_covariance(self, X):
-        n = X.shape[1]
-        X -= X.mean(axis=1)[:, None]
-        return np.dot(X, X.T.conj()) / float(n)
-
     def _compute_covariance_matrices(self, X, y):
         _, n_channels, _ = X.shape
 
@@ -23,8 +29,8 @@ class CSP(TransformerMixin, BaseEstimator):
             x_class = X[y==cur_class]
             x_class = np.transpose(x_class, [1, 0, 2])
             x_class = x_class.reshape(n_channels, -1)
-            cov = self._calculate_covariance(x_class)
-            covs.append(cov)
+            cov_mat = np.cov(x_class)
+            covs.append(cov_mat)
         
         return np.stack(covs)
 
@@ -34,7 +40,7 @@ class CSP(TransformerMixin, BaseEstimator):
         self._classes = np.unique(y)
 
         covs = self._compute_covariance_matrices(X, y)
-        eigen_values, eigen_vectors = linalg.eigh(covs[0])
+        eigen_values, eigen_vectors = linalg.eigh(covs[0], covs.sum(0))
     
         ix = np.argsort(np.abs(eigen_values - 0.5))[::-1]
         eigen_vectors = eigen_vectors[:, ix]

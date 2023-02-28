@@ -142,7 +142,7 @@ def get_data(experiment_set=0, subject_number=1, from_scratch=False) -> Epochs:
 def get_model_and_data(epochs, experiment_set=0, subject_number=1, from_scratch=False) -> float:
     labels = epochs.events[:, -1]
     epochs_train = epochs.copy().crop(tmin=1.0, tmax=4.0).get_data()
-    epochs_shuffled, labels_shuffled = shuffle(epochs_train, labels)
+    # epochs_shuffled, labels_shuffled = shuffle(epochs_train, labels)
 
     cv = ShuffleSplit(10, test_size=0.2)
     if (from_scratch == True
@@ -153,7 +153,7 @@ def get_model_and_data(epochs, experiment_set=0, subject_number=1, from_scratch=
         clf = Pipeline([("CSP", csp), ("LDA", lda)])
 
         # fit our pipeline to the experiment
-        X_train, X_test, y_train, y_test = train_test_split(epochs_shuffled, labels_shuffled, random_state=0)
+        X_train, X_test, y_train, y_test = train_test_split(epochs_train, labels, random_state=0)
         clf.fit(X_train, y_train)
 
         # save model
@@ -165,10 +165,10 @@ def get_model_and_data(epochs, experiment_set=0, subject_number=1, from_scratch=
         clf = joblib.load(f'{SAVE_PATH}/models/experiment_{experiment_set}/S{subject_number:03d}.save')
 
     if from_scratch==True:
-        scores = cross_val_score(clf, epochs_shuffled, labels_shuffled, cv=cv, n_jobs=None)
+        scores = cross_val_score(clf, epochs_train, labels, cv=cv, n_jobs=None)
         print(f'cross_val_score: {np.mean(scores)}')
 
-    return clf, epochs_shuffled, labels_shuffled
+    return clf, epochs_train, labels
 
 def predict_and_get_acurracy(clf, epochs, labels, from_scratch) -> float:
     cv = ShuffleSplit(10, test_size=0.2)
@@ -184,11 +184,6 @@ def predict_and_get_acurracy(clf, epochs, labels, from_scratch) -> float:
 
     return accuracy_score(predictions, y_test)
     
-    scores = cross_val_score(clf, epochs, labels, cv=cv, n_jobs=None)
-    return clf.score(epochs, labels)
-    return np.mean(scores)
-    return accuracy_score(labels, predictions)
-
 
 if __name__=="__main__":
     np.random.seed(seed=int(time.time())) 
